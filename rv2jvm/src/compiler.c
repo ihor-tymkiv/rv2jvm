@@ -20,4 +20,3 @@ struct compilation_result compile(char *source) {
 	};
 	return result;
 }
-
