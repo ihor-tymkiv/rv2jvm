@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sysexits.h>
 
+#include "codegen.h"
 #include "compiler.h"
 
 static char *read_file(const char *path) {
@@ -70,12 +71,14 @@ static char *get_compiled_filename(char *src_filename) {
 }
 
 static void compile_file(char *path) {
+	struct bytecode bytecode = {0};
 	char *src = read_file(path);
-	struct compilation_result result = compile(src);
+	compile(src, &bytecode);
 	char *compiled_filename = get_compiled_filename(path);
-	write_file(compiled_filename, result.bytecode, result.length);
+	write_file(compiled_filename, bytecode.items, bytecode.size);
 
 	free(compiled_filename);
+	free(bytecode.items);
 	free(src);
 }
 

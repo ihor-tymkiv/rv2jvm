@@ -164,6 +164,12 @@ struct ir_element {
 	} as;
 };
 
-void generate_bytecode(struct ir_element *ir, uint8_t **res);
+struct bytecode {
+	uint8_t *items;
+	size_t size;
+	size_t capacity;
+};
+
+void generate_bytecode(struct ir_element *ir, struct bytecode *res);
 
 #endif
