@@ -3,6 +3,6 @@
 
 #include "codegen.h"
 
-void compile(char *source, struct bytecode *res);
+void compile(int filepaths_n, char **filepaths, struct bytecode *res);
 
 #endif

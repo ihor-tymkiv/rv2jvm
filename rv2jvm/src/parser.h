@@ -3,6 +3,6 @@
 
 #include "codegen.h"
 
-void parse(char *source, struct ir_element **res);
+void parse(int filepaths_n, char **filepaths, struct ir_element **res);
 
 #endif

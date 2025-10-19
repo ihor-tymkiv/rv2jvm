@@ -183,13 +183,9 @@ static struct code create_code()
 
 static void free_code(struct code *c)
 {
-	if (c->code->items != NULL) {
-		free(c->code->items);
-	}
+	darray_free((*c->code));
 	free(c->code);
-	if (c->stack_map_frames->items != NULL) {
-		free(c->stack_map_frames->items);
-	}
+	darray_free((*c->stack_map_frames));
 	free(c->stack_map_frames);
 }
 

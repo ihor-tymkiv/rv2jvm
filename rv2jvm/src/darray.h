@@ -24,4 +24,13 @@
 		darr.size++;				\
 	} while (0)
 
+#define darray_free(darr) \
+	do { \
+		if (darr.items != NULL) { \
+			free(darr.items);\
+		} \
+		darr.capacity = 0; \
+		darr.size = 0; \
+	} while (0)
+
 #endif

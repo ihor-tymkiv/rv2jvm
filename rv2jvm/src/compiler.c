@@ -5,9 +5,9 @@
 
 #include <stdio.h>
 
-void compile(char *source, struct bytecode *res)
+void compile(int filepaths_n, char **filepaths, struct bytecode *res)
 {
 	struct ir_element *ir;
-	parse(source, &ir);
+	parse(filepaths_n, filepaths, &ir);
 	generate_bytecode(ir, res);
 }
