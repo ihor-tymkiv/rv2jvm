@@ -7,10 +7,11 @@
 #include "codegen.h"
 #include "compiler.h"
 
-static char *read_file(const char *path) {
+static char *read_file(const char *path)
+{
 	FILE *file = fopen(path, "rb");
 	if (file == NULL) {
-		fprintf(stderr, "Could not open file \"%s\" for reading.\n", 
+		fprintf(stderr, "Could not open file \"%s\" for reading.\n",
 				path);
 		exit(EX_IOERR);
 	}
@@ -36,10 +37,11 @@ static char *read_file(const char *path) {
 	return buffer;
 }
 
-static void write_file(char *path, uint8_t *contents, size_t length) {
+static void write_file(char *path, uint8_t *contents, size_t length)
+{
 	FILE *file = fopen(path, "wb");
 	if (file == NULL) {
-		fprintf(stderr, "Could not open file \"%s\" for writing.\n", 
+		fprintf(stderr, "Could not open file \"%s\" for writing.\n",
 				path);
 		exit(EX_IOERR);
 	}
@@ -53,7 +55,8 @@ static void write_file(char *path, uint8_t *contents, size_t length) {
 	fclose(file);
 }
 
-static char *get_compiled_filename(char *src_filename) {
+static char *get_compiled_filename(char *src_filename)
+{
 	char *result = (char*)malloc(strlen(src_filename) + 7);
 	if (result == NULL) {
 		fprintf(stderr, "Could not allocate memory for compiled filename\n");
@@ -70,7 +73,8 @@ static char *get_compiled_filename(char *src_filename) {
 	return result;
 }
 
-static void compile_file(char *path) {
+static void compile_file(char *path)
+{
 	struct bytecode bytecode = {0};
 	char *src = read_file(path);
 	compile(src, &bytecode);
@@ -82,7 +86,8 @@ static void compile_file(char *path) {
 	free(src);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 	if (argc < 2) {
 		fprintf(stderr, "Usage: %s file...\n", argv[0]);
 		exit(EX_USAGE);

@@ -7,7 +7,8 @@
 
 #define TABLE_MAX_LOAD 0.75
 
-struct table_key to_number_key(int32_t number) {
+struct table_key to_number_key(int32_t number)
+{
 	struct table_key res = {
 		.type = TABLE_KEY_NUMBER,
 		.as.number = number
@@ -15,7 +16,8 @@ struct table_key to_number_key(int32_t number) {
 	return res;
 }
 
-struct table_key to_string_key(char *string) {
+struct table_key to_string_key(char *string)
+{
 	struct table_key res = {
 		.type = TABLE_KEY_STRING,
 		.as.string = string
@@ -23,7 +25,8 @@ struct table_key to_string_key(char *string) {
 	return res;
 }
 
-struct table *table_create() {
+struct table *table_create()
+{
 	struct table *t = malloc(sizeof(*t));
 	if (t == NULL) {
 		fprintf(stderr, "Failed to allocate memory for table.\n");
@@ -35,7 +38,8 @@ struct table *table_create() {
 	return t;
 }
 
-void table_free(struct table *table) {
+void table_free(struct table *table)
+{
 	for (size_t i = 0; i < table->size; i++) {
 		if (table->values[i].value == NULL) {
 			continue;
@@ -49,7 +53,8 @@ void table_free(struct table *table) {
 /*
  * Compute 32 bit FNV-1a hash.
  */
-static uint32_t hash_string(char *string) {
+static uint32_t hash_string(char *string)
+{
 	uint32_t hash = 0x811c9dc5;
 	while (*string != '\0') {
 		hash ^= (uint8_t)*string;
@@ -62,7 +67,8 @@ static uint32_t hash_string(char *string) {
 /*
  * Compute 32 bit Thomas Wang Bit Mix Hash.
  */
-static uint32_t hash_number(int32_t number) {
+static uint32_t hash_number(int32_t number)
+{
 	uint32_t hash = (uint32_t)number;
 	hash = ~hash + (hash << 15);
 	hash ^= hash >> 12;
@@ -73,7 +79,8 @@ static uint32_t hash_number(int32_t number) {
 	return hash;
 }
 
-static uint32_t hash(struct table_key key) {
+static uint32_t hash(struct table_key key)
+{
 	switch (key.type) {
 	case TABLE_KEY_NUMBER:
 		return hash_number(key.as.number);
@@ -82,7 +89,8 @@ static uint32_t hash(struct table_key key) {
 	}
 }
 
-static bool keys_equal(struct table_key *k1, struct table_key *k2) {
+static bool keys_equal(struct table_key *k1, struct table_key *k2)
+{
 	if (k1->type != k2->type) {
 		return false;
 	}
@@ -95,8 +103,9 @@ static bool keys_equal(struct table_key *k1, struct table_key *k2) {
 	}
 }
 
-static struct table_value *find_slot(struct table *table, 
-				     struct table_key *key) {
+static struct table_value *find_slot(struct table *table,
+				     struct table_key *key)
+{
 	uint32_t idx = key->hash % table->capacity;
 	while (table->values[idx].value != NULL) {
 		if (keys_equal(key, &table->values[idx].key)) {
@@ -107,7 +116,8 @@ static struct table_value *find_slot(struct table *table,
 	return &table->values[idx];
 }
 
-static void grow_capacity(struct table *table) {
+static void grow_capacity(struct table *table)
+{
 	size_t old_capacity = table->capacity;
 	if (old_capacity == 0) {
 		table->capacity = 64;
@@ -137,20 +147,24 @@ static void grow_capacity(struct table *table) {
 	table->values = values;
 }
 
-void table_set(struct table *table, struct table_key key, void *value) {
+bool table_set(struct table *table, struct table_key key, void *value)
+{
 	if (table->size + 1 > table->capacity * TABLE_MAX_LOAD) {
 		grow_capacity(table);
 	}
 	key.hash = hash(key);
 	struct table_value *slot = find_slot(table, &key);
-	if (slot->value == NULL) {
+	bool new_added = slot->value == NULL;
+	if (new_added) {
 		table->size++;
 	}
 	slot->key = key;
 	slot->value = value;
+	return new_added;
 }
 
-struct table_value *table_get(struct table *table, struct table_key key) {
+struct table_value *table_get(struct table *table, struct table_key key)
+{
 	if (table->size == 0) {
 		return NULL;
 	}

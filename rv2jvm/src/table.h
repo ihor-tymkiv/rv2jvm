@@ -1,8 +1,7 @@
 #ifndef RV2JVM_TABLE_H
 #define RV2JVM_TABLE_H
 
-#define TABLE_MAX_LOAD 0.75
-
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -38,7 +37,7 @@ struct table {
 struct table_key to_number_key(int32_t number);
 struct table_key to_string_key(char *string);
 struct table *table_create();
-void table_set(struct table *table, struct table_key key, void *value);
+bool table_set(struct table *table, struct table_key key, void *value);
 struct table_value *table_get(struct table *table, struct table_key key);
 void table_free(struct table *table);
 

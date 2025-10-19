@@ -5,15 +5,21 @@
 #include <stdint.h>
 
 enum ir_element_type {
-	IR_INSTRUCTION, 
-	IR_LABEL, 
-	IR_DIRECTIVE
+	IR_INSTRUCTION,
+	IR_LABEL,
+	IR_DIRECTIVE,
+	IR_EOF
 };
 
-enum ir_instruction_type { 
-	TYPE_R3, 
-	TYPE_R2_IMM12, 
-	TYPE_R1_IMM20 
+enum ir_operand_type {
+	OPERAND_IMM,
+	OPERAND_LABEL
+};
+
+enum ir_instruction_type {
+	TYPE_R3,
+	TYPE_R2_OP,
+	TYPE_R1_OP
 };
 
 enum ir_instruction_register {
@@ -124,15 +130,23 @@ struct ir_instruction_r3 {
 	enum ir_instruction_register rs2;
 };
 
-struct ir_instruction_r2imm12 {
+struct ir_instruction_r2op {
 	enum ir_instruction_register rd;
 	enum ir_instruction_register rs1;
-	int16_t imm : 12;
+	enum ir_operand_type op_type;
+	union {
+		int16_t imm : 12;
+		char *label;
+	} op;
 };
 
-struct ir_instruction_r1imm20 {
+struct ir_instruction_r1op {
 	enum ir_instruction_register rd;
-	int32_t imm : 20;
+	enum ir_operand_type op_type;
+	union {
+		int32_t imm : 20;
+		char *label;
+	} op;
 };
 
 struct ir_instruction {
@@ -140,8 +154,8 @@ struct ir_instruction {
 	enum ir_instruction_mnemonic mnemonic;
 	union {
 		struct ir_instruction_r3 r3;
-		struct ir_instruction_r2imm12 r2imm12;
-		struct ir_instruction_r1imm20 r1imm20;
+		struct ir_instruction_r2op r2op;
+		struct ir_instruction_r1op r1op;
 	} as;
 };
 
