@@ -2,7 +2,8 @@
 #define RV2JVM_PARSER_H
 
 #include "codegen.h"
+#include "tokens.h"
 
-void parse(int filepaths_n, char **filepaths, struct ir_element **res);
+void parse(struct tokens tokens, struct ir_element **res);
 
 #endif

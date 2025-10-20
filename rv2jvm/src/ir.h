@@ -59,6 +59,7 @@ enum ir_instruction_register {
 };
 
 enum ir_instruction_mnemonic {
+	UNKNOWN_MNEMONIC = -1,
 	// chapter 2.4.1
 	ADDI,
 	MV,
