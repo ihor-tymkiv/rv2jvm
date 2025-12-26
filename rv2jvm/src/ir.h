@@ -19,7 +19,8 @@ enum ir_operand_type {
 enum ir_instruction_type {
 	TYPE_R3,
 	TYPE_R2_OP,
-	TYPE_R1_OP
+	TYPE_R1_OP,
+	TYPE_MEM
 };
 
 enum ir_instruction_register {
@@ -150,6 +151,12 @@ struct ir_instruction_r1op {
 	} op;
 };
 
+struct ir_instruction_mem {
+	enum ir_instruction_register rd;
+	enum ir_instruction_register rs1;
+	int16_t offset : 12;
+};
+
 struct ir_instruction {
 	enum ir_instruction_type type;
 	enum ir_instruction_mnemonic mnemonic;
@@ -157,6 +164,7 @@ struct ir_instruction {
 		struct ir_instruction_r3 r3;
 		struct ir_instruction_r2op r2op;
 		struct ir_instruction_r1op r1op;
+		struct ir_instruction_mem mem;
 	} as;
 };
 

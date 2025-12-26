@@ -137,6 +137,8 @@ static struct token scan_token(struct lexer *lexer)
 		case ',': return create_token(lexer, TOKEN_COMMA);
 		case '-': return create_token(lexer, TOKEN_MINUS);
 		case ':': return create_token(lexer, TOKEN_COLON);
+		case '(': return create_token(lexer, TOKEN_LPAREN);
+		case ')': return create_token(lexer, TOKEN_RPAREN);
 		case '\n':
 			  lexer->line++;
 			  return create_token(lexer, TOKEN_NEWLINE);

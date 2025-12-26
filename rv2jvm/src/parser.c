@@ -387,6 +387,20 @@ static char *identifier(struct parser *parser)
 	return identifier;
 }
 
+static void memory_operand(struct parser *parser, int16_t *offset, 
+			   enum ir_instruction_register *rs1)
+{
+	if (check(parser, TOKEN_DECIMAL) || check(parser, TOKEN_MINUS)) {
+		int32_t imm = number(parser);
+		*offset = (int16_t)imm;
+	} else {
+		*offset = 0;
+	}
+	consume(parser, TOKEN_LPAREN, "Expected '(' after offset");
+	*rs1 = reg(parser);
+	consume(parser, TOKEN_RPAREN, "Expected ')' after rs1");
+}
+
 static struct ir_instruction create_r3_instruction(enum ir_instruction_mnemonic mnemonic,
 						   enum ir_instruction_register rd,
 						   enum ir_instruction_register rs1,
@@ -398,6 +412,20 @@ static struct ir_instruction create_r3_instruction(enum ir_instruction_mnemonic 
 	inst.as.r3.rd = rd;
 	inst.as.r3.rs1 = rs1;
 	inst.as.r3.rs2 = rs2;
+	return inst;
+}
+
+static struct ir_instruction create_mem_instruction(enum ir_instruction_mnemonic mnemonic,
+							 enum ir_instruction_register rd,
+							 enum ir_instruction_register rs1,
+							 int16_t offset)
+{
+	struct ir_instruction inst;
+	inst.type = TYPE_MEM;
+	inst.mnemonic = mnemonic;
+	inst.as.mem.rd = rd;
+	inst.as.mem.rs1 = rs1;
+	inst.as.mem.offset = offset;
 	return inst;
 }
 
@@ -481,14 +509,6 @@ static enum ir_instruction_type get_instruction_type(enum ir_instruction_mnemoni
 	case SLLI:
 	case SRLI:
 	case SRAI:
-	case LW:
-	case LH:
-	case LHU:
-	case LB:
-	case LBU:
-	case SW:
-	case SH:
-	case SB:
 	case BEQ:
 	case BNE:
 	case BLT:
@@ -497,6 +517,16 @@ static enum ir_instruction_type get_instruction_type(enum ir_instruction_mnemoni
 	case BGEU:
 	case JALR:
 		return TYPE_R2_OP;
+
+	case LW:
+	case LH:
+	case LHU:
+	case LB:
+	case LBU:
+	case SW:
+	case SH:
+	case SB:
+		return TYPE_MEM;
 	
 	case LUI:
 	case AUIPC:
@@ -529,18 +559,35 @@ static void parse_r3_instruction(struct parser *parser,
 	darray_append((parser->ir), element);
 }
 
+static void parse_mem_instruction(struct parser *parser,
+				  enum ir_instruction_mnemonic mnemonic)
+{
+	enum ir_instruction_register rd, rs1;
+	int16_t offset;
+
+	rd = reg(parser);
+	consume(parser, TOKEN_COMMA, "Expected ',' after rd");
+	memory_operand(parser, &offset, &rs1);
+	
+	struct ir_instruction inst = create_mem_instruction(mnemonic, rd, rs1, offset);
+	struct ir_element element = {
+		.type = IR_INSTRUCTION,
+		.as.instruction = inst
+	};
+	darray_append((parser->ir), element);
+}
+
 static void parse_r2op_instruction(struct parser *parser,
 				   enum ir_instruction_mnemonic mnemonic)
 {
 	enum ir_instruction_register rd, rs1;
-	
+	struct ir_instruction inst;
+
 	rd = reg(parser);
 	consume(parser, TOKEN_COMMA, "Expected ',' after rd");
 	
 	rs1 = reg(parser);
 	consume(parser, TOKEN_COMMA, "Expected ',' after rs1");
-	
-	struct ir_instruction inst;
 	
 	if (check(parser, TOKEN_DECIMAL) || check(parser, TOKEN_MINUS)) {
 		int32_t imm = number(parser);
@@ -706,6 +753,9 @@ static void instruction(struct parser *parser)
 		break;
 	case TYPE_R1_OP:
 		parse_r1op_instruction(parser, mnemonic);
+		break;
+	case TYPE_MEM:
+		parse_mem_instruction(parser, mnemonic);
 		break;
 	default:
 		// pseudoinstructions

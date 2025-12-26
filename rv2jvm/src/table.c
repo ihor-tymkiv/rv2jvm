@@ -2,6 +2,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sysexits.h>
 
@@ -103,17 +105,18 @@ static bool keys_equal(struct table_key *k1, struct table_key *k2)
 	}
 }
 
-static struct table_value *find_slot(struct table *table,
+static struct table_value *find_slot(struct table_value *values,
+				     size_t capacity,
 				     struct table_key *key)
 {
-	uint32_t idx = key->hash % table->capacity;
-	while (table->values[idx].value != NULL) {
-		if (keys_equal(key, &table->values[idx].key)) {
+	uint32_t idx = key->hash % capacity;
+	while (values[idx].value != NULL) {
+		if (keys_equal(key, &values[idx].key)) {
 			break;
 		}
-		idx = (idx + 1) % table->capacity;
+		idx = (idx + 1) % capacity;
 	}
-	return &table->values[idx];
+	return &values[idx];
 }
 
 static void grow_capacity(struct table *table)
@@ -137,7 +140,7 @@ static void grow_capacity(struct table *table)
 		if (src->value == NULL) {
 			continue;
 		}
-		struct table_value *dst = find_slot(table, &src->key);
+		struct table_value *dst = find_slot(values, table->capacity, &src->key);
 		dst->key = src->key;
 		dst->value = src->value;
 	}
@@ -153,12 +156,12 @@ bool table_set(struct table *table, struct table_key key, void *value)
 		grow_capacity(table);
 	}
 	key.hash = hash(key);
-	struct table_value *slot = find_slot(table, &key);
+	struct table_value *slot = find_slot(table->values, table->capacity, &key);
 	bool new_added = slot->value == NULL;
 	if (new_added) {
 		table->size++;
+		slot->key = key;
 	}
-	slot->key = key;
 	slot->value = value;
 	return new_added;
 }
@@ -169,7 +172,7 @@ struct table_value *table_get(struct table *table, struct table_key key)
 		return NULL;
 	}
 	key.hash = hash(key);
-	struct table_value *slot = find_slot(table, &key);
+	struct table_value *slot = find_slot(table->values, table->capacity, &key);
 	if (slot->value == NULL) {
 		return NULL;
 	}
