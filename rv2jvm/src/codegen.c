@@ -11,6 +11,7 @@
 #define DEBUG
 
 #define CONSTANT_POOL_LIMIT 65536
+#define MEMORY_SIZE 8192
 
 #define THIS_CLASS_NAME "RvRuntime"
 #define THIS_CLASS "this_class"
@@ -28,6 +29,8 @@
 
 #define MEMORY_FIELD "memory_field"
 #define MEMORY_FIELD_NAME "memory"
+#define MEMORY_FIELD_NAMEANDTYPE "memory_nameandtype"
+#define MEMORY_FIELDREF "memory_fieldref"
 
 #define LONG_ARRAY_CLASS "long_array_class"
 #define LONG_ARRAY_DESCRIPTOR "[J"
@@ -89,6 +92,7 @@ enum jvm_frame_type {
 
 enum jvm_opcode {
 	JVM_BIPUSH = 16,
+	JVM_SIPUSH = 17,
 	JVM_LDC_W = 19,
 	JVM_LLOAD_2 = 32,
 	JVM_ALOAD_1 = 43,
@@ -540,6 +544,9 @@ static void constant_pool(struct codegen *c)
 	add_fieldref_to_pool(c, THIS_CLASS, REGISTERS_FIELDREF,
 			     REGISTERS_FIELD_NAMEANDTYPE, REGISTERS_FIELD_NAME,
 			     REGISTERS_FIELD_DESCRIPTOR);
+	add_fieldref_to_pool(c, THIS_CLASS, MEMORY_FIELDREF, 
+			     MEMORY_FIELD_NAMEANDTYPE, MEMORY_FIELD_NAME,
+		     	     LONG_ARRAY_DESCRIPTOR);
 
 	for (size_t i = 0; c->ir[i].type != IR_EOF; i++) {
 		switch (c->ir[i].type) {
@@ -718,6 +725,8 @@ static void clinit_method_code(struct codegen *c, struct code *code)
 {
 	code->max_stack = 3;
 	uint16_t idx;
+
+	// Initialize registers
 	write_byte(code->code, JVM_NEW);
 	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_CLASS));
 	write_bytes(code->code, idx, 2);
@@ -738,6 +747,16 @@ static void clinit_method_code(struct codegen *c, struct code *code)
 	write_byte(code->code, JVM_INVOKEVIRTUAL);
 	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_SET_METHODREF));
 	write_bytes(code->code, idx, 2);
+
+	// Initialize memory
+	write_byte(code->code, JVM_SIPUSH);
+	write_bytes(code->code, MEMORY_SIZE / 8, 2); // divide by 8 to get the number of longs
+	write_byte(code->code, JVM_NEWARRAY);
+	write_byte(code->code, JVM_T_LONG);
+	write_byte(code->code, JVM_PUTSTATIC);
+	idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+	write_bytes(code->code, idx, 2);
+
 	write_byte(code->code, JVM_RETURN);
 }
 
