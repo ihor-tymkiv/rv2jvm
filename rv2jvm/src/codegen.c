@@ -13,7 +13,7 @@
 #define CONSTANT_POOL_LIMIT 65536
 #define MEMORY_SIZE 8192
 
-#define THIS_CLASS_NAME "RvRuntime"
+#define THIS_CLASS_NAME "rv2jvm/RvRuntime"
 #define THIS_CLASS "this_class"
 #define SUPER_CLASS_NAME "java/lang/Object"
 #define SUPER_CLASS "super_class"
@@ -59,8 +59,7 @@ enum jvm_access_flag {
 	JVM_ACC_PUBLIC = 0x0001,
 	JVM_ACC_PRIVATE = 0x0002,
 	JVM_ACC_STATIC = 0x0008,
-	JVM_ACC_FINAL = 0x0010,
-	JVM_ACC_SYNTHETIC = 0x1000
+	JVM_ACC_FINAL = 0x0010
 };
 
 enum jvm_atype {
@@ -535,7 +534,7 @@ static void constant_pool(struct codegen *c)
 
 static void access_flags(struct codegen *c)
 {
-	write_int(c, JVM_ACC_PUBLIC | JVM_ACC_SYNTHETIC, 2);
+	write_int(c, JVM_ACC_PUBLIC, 2);
 }
 
 static void this_class(struct codegen *c)
@@ -571,8 +570,7 @@ static void fields(struct codegen *c)
 {
 	write_int(c, 2, 2);
 
-	uint16_t mask = JVM_ACC_PRIVATE | JVM_ACC_FINAL | JVM_ACC_STATIC
-			| JVM_ACC_SYNTHETIC;
+	uint16_t mask = JVM_ACC_PUBLIC | JVM_ACC_FINAL | JVM_ACC_STATIC;
 	add_field(c, mask, REGISTERS_FIELD_NAME, REGISTERS_FIELD_DESCRIPTOR);
 	add_field(c, mask, MEMORY_FIELD_NAME, LONG_ARRAY_DESCRIPTOR);
 }
@@ -884,7 +882,7 @@ static void methods(struct codegen *c)
 {
 	write_int(c, 2, 2);
 
-	uint16_t mask = JVM_ACC_PUBLIC | JVM_ACC_STATIC | JVM_ACC_SYNTHETIC;
+	uint16_t mask = JVM_ACC_PUBLIC | JVM_ACC_STATIC;
 	struct code clinit_code = create_code();
 	clinit_method_code(c, &clinit_code);
 	add_method(c, mask, CLINIT_METHOD_NAME, NO_ARGS_VOID_DESCRIPTOR,
