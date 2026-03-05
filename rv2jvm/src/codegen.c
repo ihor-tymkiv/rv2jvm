@@ -18,12 +18,10 @@
 #define SUPER_CLASS_NAME "java/lang/Object"
 #define SUPER_CLASS "super_class"
 
-#define THREAD_LOCAL "java/lang/ThreadLocal"
-#define THREAD_LOCAL_CLASS "thread_local"
 #define REGISTERS_FIELD "registers_field"
 #define REGISTERS_FIELD_NAME "registers"
-#define REGISTERS_FIELD_DESCRIPTOR "L" THREAD_LOCAL ";"
-#define REGISTERS_FIELD_SIGNATURE "L" THREAD_LOCAL "<[J>;"
+#define LONG_ARRAY_DESCRIPTOR "[J"
+#define REGISTERS_FIELD_DESCRIPTOR LONG_ARRAY_DESCRIPTOR
 #define REGISTERS_FIELD_NAMEANDTYPE "registers_nameandtype"
 #define REGISTERS_FIELDREF "registers_fieldref"
 
@@ -33,7 +31,6 @@
 #define MEMORY_FIELDREF "memory_fieldref"
 
 #define LONG_ARRAY_CLASS "long_array_class"
-#define LONG_ARRAY_DESCRIPTOR "[J"
 #define STRING_CLASS_NAME "java/lang/String"
 #define STRING_ARRAY_CLASS "string_array_class"
 #define STRING_ARRAY_DESCRIPTOR "[L" STRING_CLASS_NAME ";"
@@ -45,17 +42,6 @@
 #define NO_ARGS_VOID_DESCRIPTOR "()V"
 #define INIT_METHOD_NAMEANDTYPE "init_method_nameandtype"
 
-#define THREAD_LOCAL_GET_METHODREF "thread_local_get_methodref"
-#define THREAD_LOCAL_GET_METHOD_NAMEANDTYPE "thread_local_get_method_nameandtype"
-#define THREAD_LOCAL_GET_METHOD_NAME "get"
-#define THREAD_LOCAL_GET_METHOD_DESCRIPTOR "()L" SUPER_CLASS_NAME ";"
-#define THREAD_LOCAL_INIT_METHODREF "thread_local_init_methodref"
-#define THREAD_LOCAL_SET_METHODREF "thread_local_set_methodref"
-#define THREAD_LOCAL_SET_METHOD_NAMEANDTYPE "thread_local_set_method_nameandtype"
-#define THREAD_LOCAL_SET_METHOD_NAME "set"
-#define THREAD_LOCAL_SET_METHOD_DESCRIPTOR "(L" SUPER_CLASS_NAME  ";)V"
-
-#define SIGNATURE "Signature"
 #define CODE "Code"
 #define STACK_MAP_TABLE "StackMapTable"
 
@@ -513,16 +499,13 @@ static void constant_pool(struct codegen *c)
 
 	add_class_to_pool(c, SUPER_CLASS_NAME, SUPER_CLASS);
 	add_class_to_pool(c, THIS_CLASS_NAME, THIS_CLASS);
-	add_class_to_pool(c, THREAD_LOCAL, THREAD_LOCAL_CLASS);
 	add_class_to_pool(c, LONG_ARRAY_DESCRIPTOR, LONG_ARRAY_CLASS);
 	add_class_to_pool(c, STRING_ARRAY_DESCRIPTOR, STRING_ARRAY_CLASS);
 	add_utf8_to_pool(c, REGISTERS_FIELD_NAME);
 	add_utf8_to_pool(c, REGISTERS_FIELD_DESCRIPTOR);
-	add_utf8_to_pool(c, REGISTERS_FIELD_SIGNATURE);
 	add_utf8_to_pool(c, REGISTERS_FIELD);
 	add_utf8_to_pool(c, MEMORY_FIELD_NAME);
 	add_utf8_to_pool(c, MEMORY_FIELD);
-	add_utf8_to_pool(c, SIGNATURE);
 	add_utf8_to_pool(c, INIT_METHOD_NAME);
 	add_utf8_to_pool(c, CLINIT_METHOD_NAME);
 	add_utf8_to_pool(c, MAIN_METHOD_NAME);
@@ -530,17 +513,6 @@ static void constant_pool(struct codegen *c)
 	add_utf8_to_pool(c, NO_ARGS_VOID_DESCRIPTOR);
 	add_utf8_to_pool(c, CODE);
 	add_utf8_to_pool(c, STACK_MAP_TABLE);
-	add_methodref_to_pool(c, THREAD_LOCAL_CLASS, THREAD_LOCAL_INIT_METHODREF,
-			      INIT_METHOD_NAMEANDTYPE, INIT_METHOD_NAME,
-			      NO_ARGS_VOID_DESCRIPTOR);
-	add_methodref_to_pool(c, THREAD_LOCAL_CLASS, THREAD_LOCAL_SET_METHODREF,
-			      THREAD_LOCAL_SET_METHOD_NAMEANDTYPE,
-			      THREAD_LOCAL_SET_METHOD_NAME,
-			      THREAD_LOCAL_SET_METHOD_DESCRIPTOR);
-	add_methodref_to_pool(c, THREAD_LOCAL_CLASS, THREAD_LOCAL_GET_METHODREF,
-			      THREAD_LOCAL_GET_METHOD_NAMEANDTYPE,
-			      THREAD_LOCAL_GET_METHOD_NAME,
-			      THREAD_LOCAL_GET_METHOD_DESCRIPTOR);
 	add_fieldref_to_pool(c, THIS_CLASS, REGISTERS_FIELDREF,
 			     REGISTERS_FIELD_NAMEANDTYPE, REGISTERS_FIELD_NAME,
 			     REGISTERS_FIELD_DESCRIPTOR);
@@ -584,7 +556,7 @@ static void interfaces(struct codegen *c)
 }
 
 static void add_field(struct codegen *c, uint16_t access_mask, char *name,
-		      char *descriptor, char *signature)
+		      char *descriptor)
 {
 
 	uint16_t name_idx = get_constant_index(c, to_string_key(name));
@@ -592,17 +564,7 @@ static void add_field(struct codegen *c, uint16_t access_mask, char *name,
 	write_int(c, access_mask, 2);
 	write_int(c, name_idx, 2);
 	write_int(c, descriptor_idx, 2);
-
-	if (signature != NULL) {
-		write_int(c, 1, 2);
-		uint16_t idx = get_constant_index(c, to_string_key(SIGNATURE));
-		write_int(c, idx, 2);
-		write_int(c, 2, 4);
-		idx = get_constant_index(c, to_string_key(REGISTERS_FIELD_SIGNATURE));
-		write_int(c, idx, 2);
-	} else {
-		write_int(c, 0, 2);
-	}
+	write_int(c, 0, 2);
 }
 
 static void fields(struct codegen *c)
@@ -611,9 +573,8 @@ static void fields(struct codegen *c)
 
 	uint16_t mask = JVM_ACC_PRIVATE | JVM_ACC_FINAL | JVM_ACC_STATIC
 			| JVM_ACC_SYNTHETIC;
-	add_field(c, mask, REGISTERS_FIELD_NAME, REGISTERS_FIELD_DESCRIPTOR,
-		  REGISTERS_FIELD_SIGNATURE);
-	add_field(c, mask, MEMORY_FIELD_NAME, LONG_ARRAY_DESCRIPTOR, NULL);
+	add_field(c, mask, REGISTERS_FIELD_NAME, REGISTERS_FIELD_DESCRIPTOR);
+	add_field(c, mask, MEMORY_FIELD_NAME, LONG_ARRAY_DESCRIPTOR);
 }
 
 static void sort_stack_map_frames(struct stack_map_frames *stack_map_frames)
@@ -723,32 +684,19 @@ static void add_method(struct codegen *c, uint16_t mask, char *name,
 
 static void clinit_method_code(struct codegen *c, struct code *code)
 {
-	code->max_stack = 3;
+	code->max_stack = 2;
 	uint16_t idx;
 
-	// Initialize registers
-	write_byte(code->code, JVM_NEW);
-	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_CLASS));
-	write_bytes(code->code, idx, 2);
-	write_byte(code->code, JVM_DUP);
-	write_byte(code->code, JVM_INVOKESPECIAL);
-	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_INIT_METHODREF));
-	write_bytes(code->code, idx, 2);
-	write_byte(code->code, JVM_PUTSTATIC);
-	idx = get_constant_index(c, to_string_key(REGISTERS_FIELDREF));
-	write_bytes(code->code, idx, 2);
-	write_byte(code->code, JVM_GETSTATIC);
-	idx = get_constant_index(c, to_string_key(REGISTERS_FIELDREF));
-	write_bytes(code->code, idx, 2);
+	// Initialize registers: registers = new long[32];
 	write_byte(code->code, JVM_BIPUSH);
 	write_byte(code->code, 32);
 	write_byte(code->code, JVM_NEWARRAY);
 	write_byte(code->code, JVM_T_LONG);
-	write_byte(code->code, JVM_INVOKEVIRTUAL);
-	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_SET_METHODREF));
+	write_byte(code->code, JVM_PUTSTATIC);
+	idx = get_constant_index(c, to_string_key(REGISTERS_FIELDREF));
 	write_bytes(code->code, idx, 2);
 
-	// Initialize memory
+	// Initialize memory: memory = new long[MEMORY_SIZE / 8];
 	write_byte(code->code, JVM_SIPUSH);
 	write_bytes(code->code, MEMORY_SIZE / 8, 2); // divide by 8 to get the number of longs
 	write_byte(code->code, JVM_NEWARRAY);
@@ -764,12 +712,6 @@ static void load_registers_into_local(struct codegen *c, struct code *code)
 {
 	write_byte(code->code, JVM_GETSTATIC);
 	uint16_t idx = get_constant_index(c, to_string_key(REGISTERS_FIELDREF));
-	write_bytes(code->code, idx, 2);
-	write_byte(code->code, JVM_INVOKEVIRTUAL);
-	idx = get_constant_index(c, to_string_key(THREAD_LOCAL_GET_METHODREF));
-	write_bytes(code->code, idx, 2);
-	write_byte(code->code, JVM_CHECKCAST);
-	idx = get_constant_index(c, to_string_key(LONG_ARRAY_CLASS));
 	write_bytes(code->code, idx, 2);
 	write_byte(code->code, JVM_ASTORE_1);
 }
