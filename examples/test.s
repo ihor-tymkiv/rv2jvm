@@ -5,6 +5,8 @@ loop:
 	addi x5, x5, 1
 	add x5, x5, x5
 	blt x5, x6, loop
-	sb x5, 100(x0)
+	sb x5, 10(x0)
+	lb x10, 10(x0)
+	lh x11, 9(x0)
 	j end
 end:

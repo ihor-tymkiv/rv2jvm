@@ -29,6 +29,7 @@
 #define MEMORY_FIELD_NAME "memory"
 #define MEMORY_FIELD_NAMEANDTYPE "memory_nameandtype"
 #define MEMORY_FIELDREF "memory_fieldref"
+#define BYTE_ARRAY_DESCRIPTOR "[B"
 
 #define LONG_ARRAY_CLASS "long_array_class"
 #define STRING_CLASS_NAME "java/lang/String"
@@ -63,6 +64,7 @@ enum jvm_access_flag {
 };
 
 enum jvm_atype {
+	JVM_T_BYTE = 8,
 	JVM_T_LONG = 11,
 };
 
@@ -82,13 +84,22 @@ enum jvm_opcode {
 	JVM_LLOAD_2 = 32,
 	JVM_ALOAD_1 = 43,
 	JVM_LALOAD = 47,
+	JVM_BALOAD = 51,
 	JVM_LSTORE_2 = 65,
 	JVM_ASTORE_1 = 76,
 	JVM_LASTORE = 80,
+	JVM_BASTORE = 84,
 	JVM_POP2 = 88,
 	JVM_DUP = 89,
+	JVM_IADD = 96,
 	JVM_LADD = 97,
+	JVM_ISHL = 120,
+	JVM_ISHR = 122,
+	JVM_IUSHR = 124,
+	JVM_IAND = 126,
+	JVM_IOR = 128,
 	JVM_I2L = 133,
+	JVM_L2I = 136,
 	JVM_LCMP = 148,
 	JVM_IFEQ = 153,
 	JVM_IFGT = 157,
@@ -504,6 +515,7 @@ static void constant_pool(struct codegen *c)
 	add_utf8_to_pool(c, REGISTERS_FIELD_DESCRIPTOR);
 	add_utf8_to_pool(c, REGISTERS_FIELD);
 	add_utf8_to_pool(c, MEMORY_FIELD_NAME);
+	add_utf8_to_pool(c, BYTE_ARRAY_DESCRIPTOR);
 	add_utf8_to_pool(c, MEMORY_FIELD);
 	add_utf8_to_pool(c, INIT_METHOD_NAME);
 	add_utf8_to_pool(c, CLINIT_METHOD_NAME);
@@ -517,7 +529,7 @@ static void constant_pool(struct codegen *c)
 			     REGISTERS_FIELD_DESCRIPTOR);
 	add_fieldref_to_pool(c, THIS_CLASS, MEMORY_FIELDREF, 
 			     MEMORY_FIELD_NAMEANDTYPE, MEMORY_FIELD_NAME,
-		     	     LONG_ARRAY_DESCRIPTOR);
+		     	     BYTE_ARRAY_DESCRIPTOR);
 
 	for (size_t i = 0; c->ir[i].type != IR_EOF; i++) {
 		switch (c->ir[i].type) {
@@ -572,7 +584,7 @@ static void fields(struct codegen *c)
 
 	uint16_t mask = JVM_ACC_PUBLIC | JVM_ACC_FINAL | JVM_ACC_STATIC;
 	add_field(c, mask, REGISTERS_FIELD_NAME, REGISTERS_FIELD_DESCRIPTOR);
-	add_field(c, mask, MEMORY_FIELD_NAME, LONG_ARRAY_DESCRIPTOR);
+	add_field(c, mask, MEMORY_FIELD_NAME, BYTE_ARRAY_DESCRIPTOR);
 }
 
 static void sort_stack_map_frames(struct stack_map_frames *stack_map_frames)
@@ -694,11 +706,11 @@ static void clinit_method_code(struct codegen *c, struct code *code)
 	idx = get_constant_index(c, to_string_key(REGISTERS_FIELDREF));
 	write_bytes(code->code, idx, 2);
 
-	// Initialize memory: memory = new long[MEMORY_SIZE / 8];
+	// Initialize memory: memory = new byte[MEMORY_SIZE];
 	write_byte(code->code, JVM_SIPUSH);
-	write_bytes(code->code, MEMORY_SIZE / 8, 2); // divide by 8 to get the number of longs
+	write_bytes(code->code, MEMORY_SIZE, 2);
 	write_byte(code->code, JVM_NEWARRAY);
-	write_byte(code->code, JVM_T_LONG);
+	write_byte(code->code, JVM_T_BYTE);
 	write_byte(code->code, JVM_PUTSTATIC);
 	idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
 	write_bytes(code->code, idx, 2);
@@ -759,6 +771,240 @@ static void load_constant(struct codegen *c, struct code *code,
 	write_byte(code->code, JVM_I2L);
 }
 
+static void emit_int_constant(struct code *code, int32_t value)
+{
+	if (value >= -128 && value <= 127) {
+		write_byte(code->code, JVM_BIPUSH);
+		write_byte(code->code, (int8_t)value);
+	} else {
+		write_byte(code->code, JVM_SIPUSH);
+		write_bytes(code->code, (int16_t)value, 2);
+	}
+}
+
+static void emit_effective_address_int(struct code *code,
+				       enum ir_instruction_register rs1,
+				       int16_t offset)
+{
+	// Assumes nothing on the stack. Leaves: int addr.
+	load_register(code, rs1);
+	emit_int_constant(code, offset);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LADD);
+	write_byte(code->code, JVM_L2I);
+}
+
+static void emit_load_byte(struct codegen *c, struct code *code,
+			   enum ir_instruction_register rd,
+			   enum ir_instruction_register rs1,
+			   int16_t offset, bool is_unsigned)
+{
+	write_byte(code->code, JVM_GETSTATIC);
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset);
+	write_byte(code->code, JVM_BALOAD);
+	if (is_unsigned) {
+		emit_int_constant(code, 0xFF);
+		write_byte(code->code, JVM_IAND);
+	}
+	write_byte(code->code, JVM_I2L);
+	store_register(code, rd);
+}
+
+static void emit_load_half(struct codegen *c, struct code *code,
+			   enum ir_instruction_register rd,
+			   enum ir_instruction_register rs1,
+			   int16_t offset, bool is_unsigned)
+{
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+
+	// low byte -> local2 as long
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// high byte, combine
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset + 1);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	emit_int_constant(code, 8);
+	write_byte(code->code, JVM_ISHL);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	write_byte(code->code, JVM_IOR);
+
+	if (is_unsigned) {
+		emit_int_constant(code, 0xFFFF);
+		write_byte(code->code, JVM_IAND);
+	} else {
+		emit_int_constant(code, 16);
+		write_byte(code->code, JVM_ISHL);
+		emit_int_constant(code, 16);
+		write_byte(code->code, JVM_ISHR);
+	}
+
+	write_byte(code->code, JVM_I2L);
+	store_register(code, rd);
+}
+
+static void emit_load_word(struct codegen *c, struct code *code,
+			   enum ir_instruction_register rd,
+			   enum ir_instruction_register rs1,
+			   int16_t offset)
+{
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+
+	// b0 -> local2 as long (accumulator)
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// b1
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset + 1);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	emit_int_constant(code, 8);
+	write_byte(code->code, JVM_ISHL);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	write_byte(code->code, JVM_IOR);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// b2
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset + 2);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	emit_int_constant(code, 16);
+	write_byte(code->code, JVM_ISHL);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	write_byte(code->code, JVM_IOR);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// b3
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset + 3);
+	write_byte(code->code, JVM_BALOAD);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	emit_int_constant(code, 24);
+	write_byte(code->code, JVM_ISHL);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	write_byte(code->code, JVM_IOR);
+
+	write_byte(code->code, JVM_I2L);
+	store_register(code, rd);
+}
+
+static void emit_store_byte(struct codegen *c, struct code *code,
+			    enum ir_instruction_register rd,
+			    enum ir_instruction_register rs1,
+			    int16_t offset)
+{
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset);
+	load_register(code, rd);
+	write_byte(code->code, JVM_L2I);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_BASTORE);
+}
+
+static void emit_store_half(struct codegen *c, struct code *code,
+			    enum ir_instruction_register rd,
+			    enum ir_instruction_register rs1,
+			    int16_t offset)
+{
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+
+	// value -> local2 as long
+	load_register(code, rd);
+	write_byte(code->code, JVM_L2I);
+	emit_int_constant(code, 0xFFFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// b0
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_BASTORE);
+
+	// b1
+	write_byte(code->code, JVM_GETSTATIC);
+	write_bytes(code->code, idx, 2);
+	emit_effective_address_int(code, rs1, offset + 1);
+	write_byte(code->code, JVM_LLOAD_2);
+	write_byte(code->code, JVM_L2I);
+	emit_int_constant(code, 8);
+	write_byte(code->code, JVM_IUSHR);
+	emit_int_constant(code, 0xFF);
+	write_byte(code->code, JVM_IAND);
+	write_byte(code->code, JVM_BASTORE);
+}
+
+static void emit_store_word(struct codegen *c, struct code *code,
+			    enum ir_instruction_register rd,
+			    enum ir_instruction_register rs1,
+			    int16_t offset)
+{
+	uint16_t idx = get_constant_index(c, to_string_key(MEMORY_FIELDREF));
+
+	// value -> local2 as long
+	load_register(code, rd);
+	write_byte(code->code, JVM_L2I);
+	write_byte(code->code, JVM_I2L);
+	write_byte(code->code, JVM_LSTORE_2);
+
+	// bytes 0..3
+	for (int i = 0; i < 4; i++) {
+		write_byte(code->code, JVM_GETSTATIC);
+		write_bytes(code->code, idx, 2);
+		emit_effective_address_int(code, rs1, offset + i);
+		write_byte(code->code, JVM_LLOAD_2);
+		write_byte(code->code, JVM_L2I);
+		if (i > 0) {
+			emit_int_constant(code, i * 8);
+			write_byte(code->code, JVM_IUSHR);
+		}
+		emit_int_constant(code, 0xFF);
+		write_byte(code->code, JVM_IAND);
+		write_byte(code->code, JVM_BASTORE);
+	}
+}
+
 static void jump(struct codegen *c, struct code *code, char *label)
 {
 	add_label_reference(c, label, code->code->size, code->code->size + 1);
@@ -814,6 +1060,61 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 		}
 		break;
 
+	case TYPE_MEM:
+		switch (instr.mnemonic) {
+		case LB:
+			emit_load_byte(c, code,
+				       instr.as.mem.rd,
+				       instr.as.mem.rs1,
+				       instr.as.mem.offset, false);
+			break;
+		case LBU:
+			emit_load_byte(c, code,
+				       instr.as.mem.rd,
+				       instr.as.mem.rs1,
+				       instr.as.mem.offset, true);
+			break;
+		case LH:
+			emit_load_half(c, code,
+				       instr.as.mem.rd,
+				       instr.as.mem.rs1,
+				       instr.as.mem.offset, false);
+			break;
+		case LHU:
+			emit_load_half(c, code,
+				       instr.as.mem.rd,
+				       instr.as.mem.rs1,
+				       instr.as.mem.offset, true);
+			break;
+		case LW:
+			emit_load_word(c, code,
+				       instr.as.mem.rd,
+				       instr.as.mem.rs1,
+				       instr.as.mem.offset);
+			break;
+		case SB:
+			emit_store_byte(c, code,
+					instr.as.mem.rd,
+					instr.as.mem.rs1,
+					instr.as.mem.offset);
+			break;
+		case SH:
+			emit_store_half(c, code,
+					instr.as.mem.rd,
+					instr.as.mem.rs1,
+					instr.as.mem.offset);
+			break;
+		case SW:
+			emit_store_word(c, code,
+					instr.as.mem.rd,
+					instr.as.mem.rs1,
+					instr.as.mem.offset);
+			break;
+		default:
+			break;
+		}
+		break;
+
 	case TYPE_R1_OP:
 		switch (instr.mnemonic) {
 		case J:
@@ -847,7 +1148,7 @@ static void update_label_reference(struct codegen *c, struct code *code,
 
 static void main_method_code(struct codegen *c, struct code *code)
 {
-	code->max_stack = 5;
+	code->max_stack = 8;
 	code->max_locals = 2 + 2;
 	load_registers_into_local(c, code);
 
