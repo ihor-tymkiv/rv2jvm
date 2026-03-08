@@ -78,6 +78,8 @@ enum jvm_frame_type {
 };
 
 enum jvm_opcode {
+	JVM_LCONST_0 = 9,
+	JVM_LCONST_1 = 10,
 	JVM_BIPUSH = 16,
 	JVM_SIPUSH = 17,
 	JVM_LDC_W = 19,
@@ -93,15 +95,25 @@ enum jvm_opcode {
 	JVM_DUP = 89,
 	JVM_IADD = 96,
 	JVM_LADD = 97,
+	JVM_LSUB = 101,
 	JVM_ISHL = 120,
+	JVM_LSHL = 121,
 	JVM_ISHR = 122,
+	JVM_LSHR = 123,
 	JVM_IUSHR = 124,
+	JVM_LUSHR = 125,
 	JVM_IAND = 126,
+	JVM_LAND = 127,
 	JVM_IOR = 128,
+	JVM_LOR = 129,
+	JVM_LXOR = 131,
 	JVM_I2L = 133,
 	JVM_L2I = 136,
 	JVM_LCMP = 148,
 	JVM_IFEQ = 153,
+	JVM_IFNE = 154,
+	JVM_IFLT = 155,
+	JVM_IFGE = 156,
 	JVM_IFGT = 157,
 	JVM_RETURN = 177,
 	JVM_GETSTATIC = 178,
@@ -1016,18 +1028,80 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			      struct code *code)
 {
 	struct ir_instruction instr = c->ir[ir_idx].as.instruction;
+	int16_t offset = 0;
 	switch (instr.type) {
 	case TYPE_R3:
-		load_register(code, instr.as.r3.rs1);
-		load_register(code, instr.as.r3.rs2);
 		switch (instr.mnemonic) {
 		case ADD:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
 			write_byte(code->code, JVM_LADD);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case SUB:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			write_byte(code->code, JVM_LSUB);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case SLT:
+			write_byte(code->code, JVM_LCONST_1);
+			store_register(code, instr.as.r3.rd);
+			load_register(code, instr.as.r3.rs2);
+			load_register(code, instr.as.r3.rs1);
+			write_byte(code->code, JVM_LCMP);
+			offset = 4 + ((instr.as.r3.rd == X0) ? 1 : 6);
+			add_stack_frame(c, code, code->code->size + offset);
+			write_byte(code->code, JVM_IFGT);
+			write_bytes(code->code, offset, 2);
+			write_byte(code->code, JVM_LCONST_0);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case AND:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			write_byte(code->code, JVM_LAND);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case OR:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			write_byte(code->code, JVM_LOR);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case XOR:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			write_byte(code->code, JVM_LXOR);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case SLL:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			load_constant(c, code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LSHL);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case SRL:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			load_constant(c, code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LUSHR);
+			store_register(code, instr.as.r3.rd);
+			break;
+		case SRA:
+			load_register(code, instr.as.r3.rs1);
+			load_register(code, instr.as.r3.rs2);
+			load_constant(c, code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LSHR);
+			store_register(code, instr.as.r3.rd);
 			break;
 		default:
 			break;
 		}
-		store_register(code, instr.as.r3.rd);
 		break;
 
 	case TYPE_R2_OP:
@@ -1037,6 +1111,46 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			load_constant(c, code, instr.as.r2op.op.imm);
 			write_byte(code->code, JVM_LADD);
 			store_register(code, instr.as.r2op.rd);
+			break;
+		case SLTI:
+			write_byte(code->code, JVM_LCONST_1);
+			store_register(code, instr.as.r2op.rd);
+			load_constant(c, code, instr.as.r2op.op.imm);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCMP);
+			offset = 4 + ((instr.as.r2op.rd == X0) ? 1 : 6);
+			add_stack_frame(c, code, code->code->size + offset);
+			write_byte(code->code, JVM_IFGT);
+			write_bytes(code->code, offset, 2);
+			write_byte(code->code, JVM_LCONST_0);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case ANDI:
+			load_register(code, instr.as.r2op.rs1);
+			load_constant(c, code, instr.as.r2op.op.imm);
+			write_byte(code->code, JVM_LAND);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case ORI:
+			load_register(code, instr.as.r2op.rs1);
+			load_constant(c, code, instr.as.r2op.op.imm);
+			write_byte(code->code, JVM_LOR);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case XORI:
+			load_register(code, instr.as.r2op.rs1);
+			load_constant(c, code, instr.as.r2op.op.imm);
+			write_byte(code->code, JVM_LXOR);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case BEQ:
+			load_register(code, instr.as.r2op.rd);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCMP);
+			add_stack_frame(c, code, code->code->size + 8);
+			write_byte(code->code, JVM_IFNE);
+			write_bytes(code->code, 8, 2);
+			jump(c, code, instr.as.r2op.op.label);
 			break;
 		case BNE:
 			load_register(code, instr.as.r2op.rd);
@@ -1052,9 +1166,19 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			load_register(code, instr.as.r2op.rs1);
 			write_byte(code->code, JVM_LCMP);
 			add_stack_frame(c, code, code->code->size + 8);
-			write_byte(code->code, JVM_IFGT);
+			write_byte(code->code, JVM_IFGE);
 			write_bytes(code->code, 8, 2);
 			jump(c, code, instr.as.r2op.op.label);
+			break;
+		case BGE:
+			load_register(code, instr.as.r2op.rd);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCMP);
+			add_stack_frame(c, code, code->code->size + 8);
+			write_byte(code->code, JVM_IFLT);
+			write_bytes(code->code, 8, 2);
+			jump(c, code, instr.as.r2op.op.label);
+			break;
 		default:
 			break;
 		}
