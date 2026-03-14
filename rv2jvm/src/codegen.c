@@ -1057,6 +1057,28 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			write_byte(code->code, JVM_LCONST_0);
 			store_register(code, instr.as.r3.rd);
 			break;
+		case SLTU:
+			write_byte(code->code, JVM_LCONST_1);
+			store_register(code, instr.as.r3.rd);
+			
+			load_register(code, instr.as.r3.rs2);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			load_register(code, instr.as.r3.rs1);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			write_byte(code->code, JVM_LCMP);
+			offset = 4 + ((instr.as.r3.rd == X0) ? 1 : 6);
+			add_stack_frame(c, code, code->code->size + offset);
+			write_byte(code->code, JVM_IFGT);
+			write_bytes(code->code, offset, 2);
+			write_byte(code->code, JVM_LCONST_0);
+			store_register(code, instr.as.r3.rd);
+			break;
 		case AND:
 			load_register(code, instr.as.r3.rs1);
 			load_register(code, instr.as.r3.rs2);
@@ -1125,6 +1147,29 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			write_byte(code->code, JVM_LCONST_0);
 			store_register(code, instr.as.r2op.rd);
 			break;
+		case SLTIU:
+			write_byte(code->code, JVM_LCONST_1);
+			store_register(code, instr.as.r2op.rd);
+
+			load_constant(c, code, instr.as.r2op.op.imm);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			
+			write_byte(code->code, JVM_LCMP);
+			offset = 4 + ((instr.as.r2op.rd == X0) ? 1 : 6);
+			add_stack_frame(c, code, code->code->size + offset);
+			write_byte(code->code, JVM_IFGT);
+			write_bytes(code->code, offset, 2);
+			write_byte(code->code, JVM_LCONST_0);
+			store_register(code, instr.as.r2op.rd);
+			break;
 		case ANDI:
 			load_register(code, instr.as.r2op.rs1);
 			load_constant(c, code, instr.as.r2op.op.imm);
@@ -1141,6 +1186,30 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			load_register(code, instr.as.r2op.rs1);
 			load_constant(c, code, instr.as.r2op.op.imm);
 			write_byte(code->code, JVM_LXOR);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case SLLI:
+			load_register(code, instr.as.r2op.rs1);
+			load_register(code, instr.as.r2op.op.imm);
+			emit_int_constant(code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LSHL);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case SRLI:
+			load_register(code, instr.as.r2op.rs1);
+			load_register(code, instr.as.r2op.op.imm);
+			emit_int_constant(code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LUSHR);
+			store_register(code, instr.as.r2op.rd);
+			break;
+		case SRAI:
+			load_register(code, instr.as.r2op.rs1);
+			load_register(code, instr.as.r2op.op.imm);
+			emit_int_constant(code, 0x1F);
+			write_byte(code->code, JVM_LAND);
+			write_byte(code->code, JVM_LSHR);
 			store_register(code, instr.as.r2op.rd);
 			break;
 		case BEQ:
@@ -1170,9 +1239,45 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 			write_bytes(code->code, 8, 2);
 			jump(c, code, instr.as.r2op.op.label);
 			break;
+		case BLTU:
+			load_register(code, instr.as.r2op.rd);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			
+			write_byte(code->code, JVM_LCMP);
+			add_stack_frame(c, code, code->code->size + 8);
+			write_byte(code->code, JVM_IFGE);
+			write_bytes(code->code, 8, 2);
+			jump(c, code, instr.as.r2op.op.label);
+			break;
 		case BGE:
 			load_register(code, instr.as.r2op.rd);
 			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCMP);
+			add_stack_frame(c, code, code->code->size + 8);
+			write_byte(code->code, JVM_IFLT);
+			write_bytes(code->code, 8, 2);
+			jump(c, code, instr.as.r2op.op.label);
+			break;
+		case BGEU:
+			load_register(code, instr.as.r2op.rd);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			load_register(code, instr.as.r2op.rs1);
+			write_byte(code->code, JVM_LCONST_1);
+			emit_int_constant(code, 63);
+			write_byte(code->code, JVM_LSHL);
+			write_byte(code->code, JVM_LXOR);
+			
 			write_byte(code->code, JVM_LCMP);
 			add_stack_frame(c, code, code->code->size + 8);
 			write_byte(code->code, JVM_IFLT);
@@ -1241,6 +1346,10 @@ static void write_instruction(struct codegen *c, size_t ir_idx,
 
 	case TYPE_R1_OP:
 		switch (instr.mnemonic) {
+		case LUI:
+			load_constant(c, code, instr.as.r1op.op.imm << 12);
+			store_register(code, instr.as.r1op.rd);
+			break;
 		case J:
 			jump(c, code, instr.as.r1op.op.label);
 			break;
